@@ -87,9 +87,13 @@ class ControlDatum:
 
 
 class CtlrCfg:
-  def __init__(self, buttons, joysticks):
+  def __init__(self, panels, buttons, joysticks):
+    self.panels = panels
     self.buttons = buttons
     self.joysticks = joysticks
+    # TODO: pretty sure keeping track of index is no longer necessary
+    for i, p in enumerate(self.panels):
+      p.index = i
     for i, b in enumerate(self.buttons):
       b.index = i
     for i, j in enumerate(self.joysticks):
@@ -98,15 +102,20 @@ class CtlrCfg:
 
   def from_str(s):
     parts = s.split(']')
-    if len(parts) != 2:
-      exit('2 sets of things for a CtlrCfg')
-    btns = [Button.from_str(s) for s in parts[0].split(';')[:-1]]
-    jstks = [JoyStick.from_str(s) for s in parts[1].split(';')[:-1]]
-    return CtlrCfg(btns, jstks)
+    if len(parts) != 3:
+      exit('3 sets of things for a CtlrCfg')
+    pnls = [Panel.from_str(s) for s in parts[0].split(';')[:-1]]
+    btns = [Button.from_str(s) for s in parts[1].split(';')[:-1]]
+    jstks = [JoyStick.from_str(s) for s in parts[2].split(';')[:-1]]
+    return CtlrCfg(pnls, btns, jstks)
     
 
   def to_str(self):
     s = ''
+    for pnl in self.panels:
+      s += pnl.to_str()
+      s += ';'
+    s += ']'
     for btn in self.buttons:
       s += btn.to_str()
       s += ';'
@@ -117,8 +126,6 @@ class CtlrCfg:
     return s
 
   def get_element_containing_point(self, x, y):
-    # x as fraction of screen width (long)
-    # y as fraction of screen height (short)
     for i, btn in enumerate(self.buttons):
       if (btn.x1 <= x and x < btn.x2 and
           btn.y1 <= y and y < btn.y2):
@@ -145,9 +152,38 @@ class CtlrCfg:
       print(dtype)
       exit('invalid dtype')
 
-# datum type constants      
+# datum type constants
+TYPE_PANEL    = 10
 TYPE_BUTTON   = 11
 TYPE_JOYSTICK = 12
+
+
+class Panel:
+  def __init__(self, elem_id, x1, y1, x2, y2, color):
+    self.elem_type = TYPE_PANEL
+    self.elem_id = elem_id
+    self.x1 = x1
+    self.y1 = y1
+    self.x2 = x2
+    self.y2 = y2
+    self.color = int.from_bytes(color, 'little')
+
+  def from_str(s):
+    parts = s.split(',')
+    if len(parts) != 6:
+      exit('there must be 6 args to Panel')
+    elem_id = int(parts[0])
+    x = float(parts[1])
+    y = float(parts[2])
+    w = float(parts[3])
+    h = float(parts[4])
+    color = int(parts[5])
+    c_bytes = color.to_bytes(4, 'little')
+    return Panel(elem_id, x, y, x + w, y + h, c_bytes)
+
+  def to_str(self):
+    return (str(self.x1) + ',' + str(self.y1) + ',' + str(self.x2) +
+            ',' + str(self.y2) + ',' + str(self.color.to_bytes(4, 'little')))
 
 
 class Button:
@@ -175,11 +211,11 @@ class Button:
     if len(parts) != 5:
       exit('there must be 5 args to Button')
     elem_id = int(parts[0])
-    x1 = float(parts[1])
-    y1 = float(parts[2])
-    x2 = float(parts[3])
-    y2 = float(parts[4])
-    return Button(elem_id, x1, y1, x2, y2)
+    x = float(parts[1])
+    y = float(parts[2])
+    w = float(parts[3])
+    h = float(parts[4])
+    return Button(elem_id, x, y, x + w, y + h)
 
   def to_str(self):
     return (str(self.x1) + ',' + str(self.y1) + ',' + str(self.x2) +
@@ -196,6 +232,7 @@ class Button:
   
   # touch began
   def datum_from_TB(self, x, y):
+    print("press from " + str(self.elem_id))
     self.depressed = True
     ctos = CtoS(MSG_TYPES["ControlPacket"], 0, 0, ControlPacket
                    (self.elem_id, ControlDatum(DATUM_TYPES["Press"], 0, 0)))

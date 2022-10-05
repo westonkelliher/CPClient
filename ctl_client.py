@@ -19,6 +19,14 @@ BUTTON_CLR   = '#999999'
 JOYPAD_CLR   = '#888888'
 JOYSTICK_CLR = '#9999A2'
 
+def color_int_to_str(num):
+  byts = num.to_bytes(4, 'little')
+  s = '#'
+  s += hex(byts[0]).split('x')[1]
+  s += hex(byts[1]).split('x')[1]
+  s += hex(byts[2]).split('x')[1]
+  return s
+
 
 def arctan(x, y):
   if x == 0:
@@ -54,6 +62,13 @@ def get_RRSN2(x1, y1, x2, y2, color):
   shape_node.position = (SPACE+x1+w/2, SPACE+y1+h/2)
   return shape_node
 
+def get_RSN2(x1, y1, x2, y2, color):
+  w = x2 - x1
+  h = y2 - y1
+  shape = ui.Path.rect(0, 0, w-SPACE*2, h-SPACE*2)
+  shape_node = ShapeNode(shape, color_int_to_str(color))
+  shape_node.position = (SPACE+x1+w/2, SPACE+y1+h/2)
+  return shape_node
 
 # circle shape node
 def get_CircSN(x, y, r, color):
@@ -73,6 +88,7 @@ class DragSender (Scene):
     #str(self.size.x) + ',' + str(self.size.y)
     # TODO: can probably just use self.send_datum
     self.conn.send_bytes(dims_ctos.to_bytes())
+    self.time_of_last_heartbeat = datetime.datetime.now()
     print("sent " + str(dims_ctos.to_bytes()))
     valid, msg = self.conn.recv_bytes(5)
     if not valid:
@@ -88,7 +104,6 @@ class DragSender (Scene):
     self.config = CtlrCfg.from_str(msg_str)
     self.ctouches = {}
     self.display_config()
-    self.time_of_last_heartbeat = datetime.datetime.now()
 
   def update(self):
     now = datetime.datetime.now()
@@ -99,16 +114,27 @@ class DragSender (Scene):
     
 
   def display_config(self):
-    # TODO: do we need to clear previous childre?
+    # TODO: do we need to clear previous children?
+    for pnl in self.config.panels:
+      # reverse y dimension
+      y1 = self.size.y - pnl.y2
+      y2 = self.size.y - pnl.y1
+      btn_node = get_RSN2(pnl.x1, y1,
+                          pnl.x2, y2, pnl.color)
+      self.add_child(btn_node)
     for btn in self.config.buttons:
-      btn_node = get_RRSN2(btn.x1, btn.y1,
-                          btn.x2, btn.y2, BUTTON_CLR)
-      print(btn_node)
+      # reverse y dimension
+      y1 = self.size.y - btn.y2
+      y2 = self.size.y - btn.y1
+      btn_node = get_RRSN2(btn.x1, y1,
+                          btn.x2, y2, BUTTON_CLR)
       self.add_child(btn_node)
     for jstk in self.config.joysticks:
-      jpd_node = get_CircSN(jstk.x, jstk.y,
+      # reverse y dimension
+      y = self.size.y - jstk.y
+      jpd_node = get_CircSN(jstk.x, y,
                            jstk.r, JOYPAD_CLR)
-      jstk_node = get_CircSN(jstk.x, jstk.y,
+      jstk_node = get_CircSN(jstk.x, y,
                            .48*jstk.r, JOYSTICK_CLR)
       jstk.jstk_node = jstk_node
       self.add_child(jpd_node)
@@ -120,8 +146,9 @@ class DragSender (Scene):
     valid, msg = self.conn.recv_bytes(5)
     if not valid:
       exit('failed to receive a 5 byter: ' + str(msg))
-    print("msg:")
-    print(msg)
+    if msg[0] != 31:
+      print("msg:")
+      print(msg)
     if msg[0] == 31: # StoC::None
       return
     elif msg[0] == 32: # StoC::StringSpec
@@ -138,7 +165,8 @@ class DragSender (Scene):
   def touch_began(self, touch):
     tx = touch.location.x
     ty = touch.location.y
-    i, elem = self.config.get_element_containing_point(tx, ty)
+    # have to reverse y dimension
+    i, elem = self.config.get_element_containing_point(tx, self.size.y - ty)
     self.ctouches[touch.touch_id] = elem
     if elem:
       datum = elem.datum_from_TB(tx, ty)
