@@ -1,3 +1,5 @@
+CHANGE_MY_VALUE='192.168.*.*'
+
 import socket
 import math
 import datetime
@@ -82,7 +84,7 @@ def get_CircSN(x, y, r, color):
 class DragSender (Scene):
   def setup(self):
     self.conn = common.Conn()
-    self.conn.connect('192.168.0.100', 50079)
+    self.conn.connect(CHANGE_MY_VALUE, 50079)
     dims_ctos = cc.CtoS(cc.MSG_TYPES["Dimensions"], self.size.x, self.size.y,
                        cc.ControlPacket(0, None))
     #str(self.size.x) + ',' + str(self.size.y)
@@ -114,7 +116,11 @@ class DragSender (Scene):
     
 
   def display_config(self):
-    # TODO: do we need to clear previous children?
+    # clear previous children
+    for node in self.children:
+      node.remove_from_parent()
+    
+    # add new children
     for pnl in self.config.panels:
       # reverse y dimension
       y1 = self.size.y - pnl.y2
@@ -182,7 +188,7 @@ class DragSender (Scene):
     if elem:
       datum = elem.datum_from_TM(tx, ty)
       if datum:
-        self.conn.send_bytes(datum)
+        self.send_datum(datum)
 
         
   def touch_ended(self, touch):
@@ -192,7 +198,7 @@ class DragSender (Scene):
     if elem:
       datum = elem.datum_from_TE(tx, ty)
       if datum:
-        self.conn.send_bytes(datum)
+        self.send_datum(datum)
     del self.ctouches[touch.touch_id]
 
 
