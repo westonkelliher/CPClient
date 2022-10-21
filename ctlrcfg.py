@@ -87,10 +87,11 @@ class ControlDatum:
 
 
 class CtlrCfg:
-  def __init__(self, panels, buttons, joysticks):
+  def __init__(self, panels, buttons, joysticks, joystickpads):
     self.panels = panels
     self.buttons = buttons
     self.joysticks = joysticks
+    self.joystickpads = joystickpads
     # TODO: pretty sure keeping track of index is no longer necessary
     for i, p in enumerate(self.panels):
       p.index = i
@@ -98,16 +99,19 @@ class CtlrCfg:
       b.index = i
     for i, j in enumerate(self.joysticks):
       j.index = i
+    for i, jp in enumerate(self.joystickpads):
+      jp.index = i
     
 
   def from_str(s):
     parts = s.split(']')
-    if len(parts) != 3:
-      exit('3 sets of things for a CtlrCfg')
+    if len(parts) != 4:
+      exit('4 sets of things for a CtlrCfg')
     pnls = [Panel.from_str(s) for s in parts[0].split(';')[:-1]]
     btns = [Button.from_str(s) for s in parts[1].split(';')[:-1]]
-    jstks = [JoyStick.from_str(s) for s in parts[2].split(';')[:-1]]
-    return CtlrCfg(pnls, btns, jstks)
+    jstks = [Joystick.from_str(s) for s in parts[2].split(';')[:-1]]
+    jstkpds = [JoystickPad.from_str(s) for s in parts[3].split(';')[:-1]]
+    return CtlrCfg(pnls, btns, jstks, jstkpds)
     
 
   def to_str(self):
@@ -123,6 +127,9 @@ class CtlrCfg:
     for jstk in self.joysticks:
       s += jstk.to_str()
       s += ';'
+    for jstkpd in self.joystickpads:
+      s += jstkpd.to_str()
+      s += ';'
     return s
 
   def get_element_containing_point(self, x, y):
@@ -133,8 +140,13 @@ class CtlrCfg:
     for i, jstk in enumerate(self.joysticks):
       if dist(x, y, jstk.x, jstk.y) < jstk.r:
         return i, jstk
+    for i, jstkpd in enumerate(self.joystickpads):
+      if (jstkpd.x1 <= x and x < jstkpd.x2 and
+          jstkpd.y1 <= y and y < jstkpd.y2):
+        return i, jstkpd
     return -1, None
 
+  '''
   def route_datum(self, datum):
     parts = datum.split(':')
     if len(parts) != 3:
@@ -147,15 +159,19 @@ class CtlrCfg:
       self.buttons[index].handle_datum(subdatum)
     elif dtype == TYPE_JOYSTICK:
       self.joysticks[index].handle_datum(subdatum)
+    elif dtype == TYPE_JOYSTICKPAD:
+      self.joystickpads[index].handle_datum(subdatum)
     else:
       print(parts)
       print(dtype)
       exit('invalid dtype')
-
+  '''
+  
 # datum type constants
-TYPE_PANEL    = 10
-TYPE_BUTTON   = 11
-TYPE_JOYSTICK = 12
+TYPE_PANEL       = 10
+TYPE_BUTTON      = 11
+TYPE_JOYSTICK    = 12
+TYPE_JOYSTICKPAD = 13
 
 
 class Panel:
@@ -221,6 +237,7 @@ class Button:
     return (str(self.x1) + ',' + str(self.y1) + ',' + str(self.x2) +
             ',' + str(self.y2))
 
+  '''
   def handle_datum(self, datum):
     self.depressed = datum == 'true'
     if self.depressed:
@@ -229,6 +246,7 @@ class Button:
     else:
       if self.on_release:
         self.on_release()
+  '''
   
   # touch began
   def datum_from_TB(self, x, y):
@@ -249,7 +267,7 @@ class Button:
 
   
 
-class JoyStick:
+class Joystick:
   def __init__(self, elem_id, x, y, r):
     self.elem_type = TYPE_JOYSTICK
     self.elem_id = elem_id
@@ -268,12 +286,12 @@ class JoyStick:
   def from_str(s):
     parts = s.split(',')
     if len(parts) != 4:
-      exit('there must be 4 args to JoyStick')
+      exit('there must be 4 args to Joystick')
     elem_id = int(parts[0])
     x = float(parts[1])
     y = float(parts[2])
     r = float(parts[3])
-    return JoyStick(elem_id, x, y, r)
+    return Joystick(elem_id, x, y, r)
 
   def to_str(self):
     return (str(self.x) + ',' + str(self.y) + ',' + str(self.r))
@@ -286,7 +304,8 @@ class JoyStick:
 
   def set_on_move(self, func):
     self.on_move = func
-    
+
+  '''
   def handle_datum(self, datum):
     parts = datum.split(',')
     if parts[0] != 'true' and parts[0] != 'false':
@@ -307,7 +326,7 @@ class JoyStick:
     if self.depressed and parts[0] == 'true':
       if self.on_move:
         self.on_move(self.stick_x, self.stick_y)
-      
+  '''
 
   def datum_from_TB(self, tx, ty):
     x = tx - self.x
@@ -321,8 +340,6 @@ class JoyStick:
     self.stick_x = round(x/self.r, 2)
     self.stick_y = round(y/self.r, 2)
     self.jstk_node.position = (self.x+x, self.y+y)
-    #return (str(TYPE_JOYSTICK) + ':' + str(self.index) + ':true,'
-    #        + str(self.stick_x) + ',' + str(self.stick_y))
     ctos = CtoS(MSG_TYPES["ControlPacket"], 0, 0, ControlPacket
                    (self.elem_id, ControlDatum(DATUM_TYPES["Move"], self.stick_x, -self.stick_y)))
     return ctos.to_bytes()
@@ -342,13 +359,126 @@ class JoyStick:
                    (self.elem_id, ControlDatum(DATUM_TYPES["Move"], self.stick_x, -self.stick_y)))
     return ctos.to_bytes()
 
+
+  
+class JoystickPad:
+  def __init__(self, elem_id, x1, y1, x2, y2, r):
+    self.elem_type = TYPE_JOYSTICKPAD
+    self.elem_id = elem_id
+    self.x1 = x1
+    self.y1 = y1
+    self.x2 = x2
+    self.y2 = y2
+    self.r = r
+    self.index = None
+    self.depressed = False
+    self.circle_x = 0
+    self.circle_y = 0
+    self.stick_x = 0
+    self.stick_y = 0
+    self.jcrc_node = None
+    self.jstk_node = None
+    self.on_press = None
+    self.on_release = None
+    self.on_move = None
+
+  def from_str(s):
+    parts = s.split(',')
+    if len(parts) != 6:
+      exit('there must be 6 args to JoystickPad')
+    elem_id = int(parts[0])
+    x = float(parts[1])
+    y = float(parts[2])
+    w = float(parts[3])
+    h = float(parts[4])
+    r = float(parts[5])
+    return JoystickPad(elem_id, x, y, x+w, y+h, r)
+
+  def to_str(self):
+    return (str(self.x1) + ',' + str(self.y1) + ',' + str(self.x2) + ',' + str(self.y2) + ',' + str(self.r))
+
+  def set_on_press(self, func):
+    self.on_press = func
+
+  def set_on_release(self, func):
+    self.on_release = func
+
+  def set_on_move(self, func):
+    self.on_move = func
+    
+  '''
+  def handle_datum(self, datum):
+    parts = datum.split(',')
+    if parts[0] != 'true' and parts[0] != 'false':
+      exit('JSP datum part[0] must be true or false')
+    if not self.depressed and parts[0] == 'false':
+      exit('JSP double release')
+
+    self.stick_x = float(parts[1])
+    self.stick_y = float(parts[2])
+    if not self.depressed and parts[0] == 'true':
+      if self.on_press:
+        self.on_press(self.stick_x, self.stick_y)
+      self.depressed = True
+    if self.depressed and parts[0] == 'false':
+      if self.on_release:
+        self.on_release(self.stick_x, self.stick_y)
+      self.depressed = False
+    if self.depressed and parts[0] == 'true':
+      if self.on_move:
+        self.on_move(self.stick_x, self.stick_y)
+  '''
+
+  def datum_from_TB(self, tx, ty):
+    self.depressed = True
+    self.circle_x = tx
+    self.circle_y = ty
+    self.jcrc_node.alpha = 1
+    self.jstk_node.alpha = 1
+    self.jcrc_node.position = (self.circle_x, self.circle_y)
+    self.jstk_node.position = (self.circle_x, self.circle_y)
+    ctos = CtoS(MSG_TYPES["ControlPacket"], 0, 0, ControlPacket
+                   (self.elem_id, ControlDatum(DATUM_TYPES["Move"], self.stick_x, -self.stick_y)))
+    return ctos.to_bytes()
+  
+    
+  
+  def datum_from_TM(self, tx, ty):
+    x = tx - self.circle_x
+    y = ty - self.circle_y
+    self.magnitude = dist(0,0, x,y)/self.r
+    if self.magnitude > 1:
+      x /= self.magnitude
+      y /= self.magnitude
+      self.magnitude = 1
+    self.stick_x = round(x/self.r, 2)
+    self.stick_y = round(y/self.r, 2)
+    self.jstk_node.position = (self.circle_x+x, self.circle_y+y)
+    ctos = CtoS(MSG_TYPES["ControlPacket"], 0, 0, ControlPacket
+                   (self.elem_id, ControlDatum(DATUM_TYPES["Move"], self.stick_x, -self.stick_y)))
+    return ctos.to_bytes()
+
+  def datum_from_TE(self, tx, ty):
+    # TODO: change z position to hide crc and stk (or use alpha)
+    self.depressed = False
+    self.magnitude = 0
+    self.circle_x = 0
+    self.circle_y = 0
+    self.stick_x = 0
+    self.stick_y = 0
+    self.jcrc_node.alpha = 0
+    self.jstk_node.alpha = 0
+    ctos = CtoS(MSG_TYPES["ControlPacket"], 0, 0, ControlPacket
+                   (self.elem_id, ControlDatum(DATUM_TYPES["Move"], self.stick_x, -self.stick_y)))
+    return ctos.to_bytes()
+
 # datum: element type, element index,
 
 
 '''
 TestController = CtlrCfg([Button(0, 0,   600/3, 400/2),
                           Button(0, 400/2, 600/3, 400)],
-                         [JoyStick(600*2/3, 400*1/2, 400*1/2)])
+                         [Joystick(600*2/3, 400*1/2, 400*1/2)])
 '''
 
 

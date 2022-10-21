@@ -11,7 +11,7 @@ import atexit
 
 import common
 import ctlrcfg as cc
-from ctlrcfg import CtlrCfg, Button, JoyStick
+from ctlrcfg import CtlrCfg, Button, Joystick, JoystickPad
 
 SLIDER_X  = 0 #set later
 ROUNDNESS = 8
@@ -125,9 +125,9 @@ class DragSender (Scene):
       # reverse y dimension
       y1 = self.size.y - pnl.y2
       y2 = self.size.y - pnl.y1
-      btn_node = get_RSN2(pnl.x1, y1,
+      pnl_node = get_RSN2(pnl.x1, y1,
                           pnl.x2, y2, pnl.color)
-      self.add_child(btn_node)
+      self.add_child(pnl_node)
     for btn in self.config.buttons:
       # reverse y dimension
       y1 = self.size.y - btn.y2
@@ -138,12 +138,29 @@ class DragSender (Scene):
     for jstk in self.config.joysticks:
       # reverse y dimension
       y = self.size.y - jstk.y
-      jpd_node = get_CircSN(jstk.x, y,
+      jcrc_node = get_CircSN(jstk.x, y,
                            jstk.r, JOYPAD_CLR)
       jstk_node = get_CircSN(jstk.x, y,
                            .48*jstk.r, JOYSTICK_CLR)
       jstk.jstk_node = jstk_node
-      self.add_child(jpd_node)
+      self.add_child(jcrc_node)
+      self.add_child(jstk_node)
+    for jstkpd in self.config.joystickpads:
+      # reverse y dimension
+      y1 = self.size.y - jstkpd.y2
+      y2 = self.size.y - jstkpd.y1
+      if jstkpd.depressed:
+        circle_y = self.size.y - jstkpd.circle_y
+      jpad_node = get_RRSN2(jstkpd.x1, y1,
+                            jstkpd.x2, y2, BUTTON_CLR)
+      jcrc_node = get_CircSN(jstkpd.x1, y1,
+                             jstkpd.r, JOYPAD_CLR)
+      jstk_node = get_CircSN(jstkpd.x1, y1,
+                             .48*jstkpd.r, JOYSTICK_CLR)
+      jstkpd.jcrc_node = jcrc_node
+      jstkpd.jstk_node = jstk_node
+      self.add_child(jpad_node)
+      self.add_child(jcrc_node)
       self.add_child(jstk_node)
 
 
