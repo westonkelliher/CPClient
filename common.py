@@ -15,6 +15,7 @@ class Conn:
     self.partial_msg = ''
       
   def connect(self, host, port):
+    self.sock.settimeout(1)
     self.sock.connect((host, port))
     
   def send(self, msg):

@@ -83,22 +83,30 @@ def get_CircSN(x, y, r, color):
 
 class DragSender (Scene):
   def setup(self):
+    self.failed = False
     self.conn = common.Conn()
-    self.conn.connect(CHANGE_MY_VALUE, 50079)
-    dims_ctos = cc.CtoS(cc.MSG_TYPES["Dimensions"], self.size.x, self.size.y,
+    if '*' in CHANGE_MY_VALUE:
+      print('YOU MUST REPLACE THE * CHARACTERS IN CHANGE MY VALUE TO MATCH YOUR DEVICE IP ADDRESS')
+      self.failed = True
+    try:
+      self.conn.connect(CHANGE_MY_VALUE, 50079)
+    except:
+      print('FAILED TO CONNECT. CHECK THAT YOUR IP IS CORRECT')
+      self.failed = True
+    dims_ctos = cc.CtoS(cc.MSG_TYPES['Dimensions'], self.size.x, self.size.y,
                        cc.ControlPacket(0, None))
     #str(self.size.x) + ',' + str(self.size.y)
     # TODO: can probably just use self.send_datum
     self.conn.send_bytes(dims_ctos.to_bytes())
     self.time_of_last_heartbeat = datetime.datetime.now()
-    print("sent " + str(dims_ctos.to_bytes()))
+    print('sent ' + str(dims_ctos.to_bytes()))
     valid, msg = self.conn.recv_bytes(5)
     if not valid:
       exit('failed to receive initial controller config: ' + str(msg))
-    print("msg:")
+    print('msg:')
     print(msg)
     if msg[0] != 32:
-      print("msg id not 32")
+      print('msg id not 32')
     str_spec_len = int.from_bytes(msg[1:], byteorder='little')
     print('str_spec_len ' + str(str_spec_len))
     valid, msg = self.conn.recv_bytes(str_spec_len)
@@ -108,10 +116,13 @@ class DragSender (Scene):
     self.display_config()
 
   def update(self):
+    if self.failed == True:
+      self.view.close()
+      exit()
     now = datetime.datetime.now()
     time_since = now - self.time_of_last_heartbeat
     if time_since.seconds > 0 or time_since.microseconds >= 250000:
-      self.send_datum(cc.CtoS(cc.MSG_TYPES["Heartbeat"], 0, 0, None).to_bytes())
+      self.send_datum(cc.CtoS(cc.MSG_TYPES['Heartbeat'], 0, 0, None).to_bytes())
       self.time_of_last_heartbeat = now
     
 
@@ -170,7 +181,7 @@ class DragSender (Scene):
     if not valid:
       exit('failed to receive a 5 byter: ' + str(msg))
     if msg[0] != 31:
-      print("msg:")
+      print('msg:')
       print(msg)
     if msg[0] == 31: # StoC::None
       return
@@ -182,7 +193,7 @@ class DragSender (Scene):
       self.config = CtlrCfg.from_str(msg_str)
       self.display_config()
     else:
-      print("StoC magic number " + str(msg[0]) + " cannot be handled")
+      print('StoC magic number ' + str(msg[0]) + ' cannot be handled')
     
 
   def touch_began(self, touch):
